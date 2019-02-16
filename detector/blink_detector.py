@@ -8,9 +8,14 @@ import time
 import picamera
 import picamera.array
 from PIL import Image
+from gpiozero import LED
 
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_alt.xml')
+
+# LED pins
+blue = LED(18)
+green = LED(14)
 
 # detect the face rectangle
 def detect(img, cascade = face_cascade, minimumFeatureSize=(20, 20)):
@@ -116,6 +121,9 @@ def cnnPreprocess(img):
 	return img
 
 def main():
+	# turns on the green power led
+	green.on()
+	
 	# open the camera,load the cnn model
 	camera = cv2.VideoCapture(0)
 	model = load_model('blinkModel.hdf5')
@@ -136,6 +144,9 @@ def main():
 	camera.resolution = (320, 180)
 
 	while True:
+		# turns off blue led
+		blue.off()
+		
 		now = time.time()
 
 		camera.capture(output, 'rgb')
@@ -168,6 +179,9 @@ def main():
 			close_counter += 1
 			time_elapsed += time.time() - start
 			if(time_elapsed > 100):
+				# turns on the blue led
+				blue.on()
+				
 				#play like rick rolld or some shit
 				print ("you're fucking sleeping")
 
