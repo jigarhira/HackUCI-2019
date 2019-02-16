@@ -5,7 +5,6 @@ from keras.models import load_model
 from scipy.spatial import distance as dist
 from imutils import face_utils
 import time
-import numpy as np
 import picamera
 import picamera.array
 from PIL import Image
