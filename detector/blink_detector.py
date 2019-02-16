@@ -10,26 +10,52 @@ import picamera.array
 from PIL import Image
 from gpiozero import LED
 from flask_socketio import SocketIO
+from flask_script import Manager, Server
+from flask import Flask, jsonify
+from multiprocessing import Process, Array
+from collections import defaultdict
+from twilio.rest import Client
 
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_alt.xml')
+# eye detection delays
+sleeping_delay = 100
+sms_delay = 500
+
 
 # LED pins
 blue = LED(18)
 green = LED(14)
 
+# twilio account information (fill this in)
+account_sid = ''
+auth_token = ''
+client = Client(account_sid, auth_token)
+sms_from = ''
+sms_to = ''
+
+KEY_INDICES = {
+	"are_eyes_open": 0,
+	"blink_count": 1
+}
+
 class Camera:
-	def startCamera(self):
+	def __init__(self, predictor, cascade):
+		self.predictor = predictor
+		self.cascade = cascade
+		self.asleep = False
+
+	def start(self, arr):
 		# turns on the green power led
 		green.on()
 		# open the camera,load the cnn model
 		model = load_model('blinkModel.hdf5')
+		
+		sent = 0; # if SMS has been sent
 
-		# blinks is the number of total blinks ,close_counter
+		# blinks is the number of total blinks ,close is
 		# the counter for consecutive close predictions
 		# and mem_counter the counter of the previous loop
-		close_counter = 0
-		blinks = 0
+		close= 0
+		#links = 0
 		mem_counter= 0
 		state = ''
 		time_elapsed = 0
@@ -42,62 +68,75 @@ class Camera:
 
 		while True:
 			now = time.time()
-			# turns off blue led
-			blue.off()
 
 			camera.capture(output, 'rgb')
 			frame = output.array
 			output.truncate(0)
 			frame = cv2.resize(frame, (1280, 720))
-			eyes = cropEyes(frame)
+			eyes = self.crop_eyes(frame)
 
 			# show the frame
 			cv2.imshow('blinks counter', frame)
 			key = cv2.waitKey(1) & 0xFF
 
 			if eyes is None:
+				print ("no eyes")
 				continue
 			else:
 				left_eye,right_eye = eyes
 
 			# average the predictions of the two eyes
-			prediction = (model.predict(cnnPreprocess(left_eye)) + model.predict(cnnPreprocess(right_eye)))/2.0
+			prediction = (model.predict(self.cnn_preprocess(left_eye)) + model.predict(self.cnn_preprocess(right_eye)))/2.0
 
 			# blinks
 			# if the eyes are open reset the counter for close eyes
-			if prediction > 0.5 :
-				state = 'open'
-				close_counter = 0
+			
+			if prediction > 0.5:
+				arr[KEY_INDICES["are_eyes_open"]] = True
+				close = 0
 				time_elapsed = 0
 				start = time.time()
+				sent = 0
+				blue.off() # turn off the blue led
 			else:
-				state = 'close'
-				close_counter += 1
+				arr[KEY_INDICES["are_eyes_open"]] = False
 				time_elapsed += time.time() - start
-				if(time_elapsed > 100):
-					#play like rick rolld or some shit
-					# turns on the blue led
-					blue.on()
-					print ("you're fucking sleeping")
+				print(time_elapsed)
+				if(time_elapsed > sleeping_delay) and (close == 0):
+					#play like rick rolld or some shit					
+					self.asleep = True
+					print("You're sleeping")
+					blue.on()	# turns on the blue led
+					close += 1	
+				if(time_elapsed > sms_delay) and (sent == 0):
+					print ("SMS Sent!")
+					message = client.messages.create(
+					body="Sensor detected eyes closed for longer than 10 seconds, come pick me up.",
+					from_=sms_from,
+					to=sms_to
+					)
+					sent = 1
+			
+		
 
-			if state == 'open' and mem_counter > 1:
-				blinks += 1
+			if arr[KEY_INDICES["are_eyes_open"]] and mem_counter > 1:
+				print ("got here")
+			arr[KEY_INDICES["blink_count"]] += 1
 			# keep the counter for the next loop
-			mem_counter = close_counter
+			mem_counter = close
 
 			# draw the total number of blinks on the frame along with
 			# the state for the frame
-			cv2.putText(frame, "Blinks: {}".format(blinks), (10, 30),
+			cv2.putText(frame, "Blinks: {}".format(arr[0]), (10, 30),
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 			cv2.putText(frame, "State: {}".format(state), (300, 30),
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-	@staticmethod
 	# detect the face rectangle
-	def detect(img, cascade = face_cascade, minimumFeatureSize=(20, 20)):
-		if cascade.empty():
+	def detect(self, img, minimumFeatureSize=(20, 20)):
+		if self.cascade.empty():
 			raise (Exception("There was a problem loading your Haar Cascade xml file."))
-		rects = cascade.detectMultiScale(img, scaleFactor=1.3, minNeighbors=1, minSize=minimumFeatureSize)
+		rects = self.cascade.detectMultiScale(img, scaleFactor=1.3, minNeighbors=1, minSize=minimumFeatureSize)
 
 		# if it doesn't return rectangle return array
 		# with zero lenght
@@ -109,12 +148,11 @@ class Camera:
 
 		return rects
 
-	@staticmethod
-	def cropEyes(frame):
+	def crop_eyes(self, frame):
 		gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 		# detect the face at grayscale image
-		te = detect(gray, minimumFeatureSize=(80, 80))
+		te = self.detect(gray, minimumFeatureSize=(80, 80))
 
 		# if the face detector doesn't detect face
 		# return None, else if detects more than one faces
@@ -131,7 +169,7 @@ class Camera:
 									right = int(face[2]), bottom = int(face[3]))
 
 		# determine the facial landmarks for the face region
-		shape = predictor(gray, face_rect)
+		shape = self.predictor(gray, face_rect)
 		shape = face_utils.shape_to_np(shape)
 
 		#  grab the indexes of the facial landmarks for the left and
@@ -190,35 +228,48 @@ class Camera:
 		return left_eye_image, right_eye_image
 
 	# make the image to have the same format as at training
-	@staticmethod
-	def cnnPreprocess(img):
+	def cnn_preprocess(self, img):
 		img = img.astype('float32')
 		img /= 255
 		img = np.expand_dims(img, axis=2)
 		img = np.expand_dims(img, axis=0)
 		return img
 
-class CustomServer(Server):
-	def __call__(self, app, *args, **kwargs):
-		camera = Camera()
-		camera.start()
-		return Server.__call__(self, app, *args, **kwargs)
 
-def some_function():
-	socketio.emit('some event', {'data': 42})
-
-
+# Flask stuff
 app = Flask(__name__)
-manager = Manager(app)
-manager.add_command('runserver', CustomServer())
+print("App started")
 socketio = SocketIO(app)
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_alt.xml')
+c = Camera(predictor, face_cascade)
+shared_data = Array('i',(0,0))
+
+@app.route('/')
+def index():
+	global c, shared_data
+	p = Process(target=c.start, args=(shared_data,))
+	p.start()
+	return 'same'
+	
+@app.route('/stats')
+def asdf():
+	global shared_data
+	return jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
 
 def main():
-	manager.run(app)
+#	print("Starting yo juj")
+
+	#cameraThread = CameraThread(predictor, cascade)
+	#cameraThread.start()
+	print("Camera thread started")
+	socketio.run(app)
+	print("WS server started")
+	socketio.emit('some event', {'data': 42})
 	# do a little clean up
-	cv2.destroyAllWindows()
-	del(camera)
+	#cv2.destroyAllWindows()
+	#del(camera)
 
-
-if _name_ == '_main_':
+if __name__ == "__main__":
+	print("hi yo mum")
 	main()
