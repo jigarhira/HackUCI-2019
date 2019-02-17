@@ -44,19 +44,20 @@ class Camera:
 		self.asleep = False
 
 	def start(self, arr):
+		global socketio
 		# turns on the green power led
 		green.on()
 		# open the camera,load the cnn model
 		model = load_model('blinkModel.hdf5')
-		
+
 		sent = 0; # if SMS has been sent
 
 		# blinks is the number of total blinks ,close is
 		# the counter for consecutive close predictions
 		# and mem_counter the counter of the previous loop
-		close= 0
+		close = 0
 		#links = 0
-		mem_counter= 0
+		mem_counter = 0
 		state = ''
 		time_elapsed = 0
 		start = time.time()
@@ -90,8 +91,11 @@ class Camera:
 
 			# blinks
 			# if the eyes are open reset the counter for close eyes
-			
+
 			if prediction > 0.5:
+				# Emit when driver re-opens eyes
+				if close == 1:
+					socketio.emit("openEyes", {})
 				arr[KEY_INDICES["are_eyes_open"]] = True
 				close = 0
 				time_elapsed = 0
@@ -102,22 +106,24 @@ class Camera:
 				arr[KEY_INDICES["are_eyes_open"]] = False
 				time_elapsed += time.time() - start
 				print(time_elapsed)
-				if(time_elapsed > sleeping_delay) and (close == 0):
-					#play like rick rolld or some shit					
+				if (time_elapsed > sleeping_delay) and (close == 0):
+					#play like rick rolld or some shit
 					self.asleep = True
 					print("You're sleeping")
 					blue.on()	# turns on the blue led
-					close += 1	
-				if(time_elapsed > sms_delay) and (sent == 0):
-					print ("SMS Sent!")
+					close += 1
+					socketio.emit("sleep", {})
+				if (time_elapsed > sms_delay) and (sent == 0):
+					print("SMS Sent!")
 					message = client.messages.create(
-					body="Sensor detected eyes closed for longer than 10 seconds, come pick me up.",
-					from_=sms_from,
-					to=sms_to
+						body="Sensor detected eyes closed for longer than 10 seconds, come pick me up.",
+						from_=sms_from,
+						to=sms_to
 					)
 					sent = 1
-			
-		
+					socketio.emit("smsSent", {})
+
+
 
 			if arr[KEY_INDICES["are_eyes_open"]] and mem_counter > 1:
 				print ("got here")
@@ -251,9 +257,9 @@ def index():
 	p = Process(target=c.start, args=(shared_data,))
 	p.start()
 	return 'same'
-	
+
 @app.route('/stats')
-def asdf():
+def stats():
 	global shared_data
 	return jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
 
