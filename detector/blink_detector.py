@@ -15,6 +15,7 @@ from flask import Flask, jsonify, send_from_directory, render_template
 from multiprocessing import Process, Array
 from collections import defaultdict
 from twilio.rest import Client
+import subprocess
 from subprocess import call
 from threading import Thread
 import os
@@ -52,6 +53,7 @@ class Camera:
 	def play_music(self):
 		rando = random.randint(1,2)
 		os.system('aplay -D bluealsa:HCI=hci0,DEV=2C:41:A1:AD:A9:D9,PROFILE=a2dp /home/pi/Downloads/%d.wav'%rando)
+		
 
 	def start(self, arr):
 		self.is_running = True
