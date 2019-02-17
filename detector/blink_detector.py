@@ -9,12 +9,15 @@ import picamera
 import picamera.array
 from PIL import Image
 from gpiozero import LED
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, send, emit
 from flask_script import Manager, Server
 from flask import Flask, jsonify
 from multiprocessing import Process, Array
 from collections import defaultdict
 from twilio.rest import Client
+from subprocess import call
+import os
+import random
 
 # eye detection delays
 sleeping_delay = 100
@@ -42,6 +45,10 @@ class Camera:
 		self.predictor = predictor
 		self.cascade = cascade
 		self.asleep = False
+
+	def play_music(self):
+		rando = random.randint(1,2)
+		os.system('aplay -D bluealsa:HCI=hci0,DEV=2C:41:A1:AD:A9:D9,PROFILE=a2dp /home/pi/Downloads/%d.wav'%rando)
 
 	def start(self, arr):
 		# turns on the green power led
@@ -90,6 +97,10 @@ class Camera:
 
 			# blinks
 			# if the eyes are open reset the counter for close eyes
+			stat_time = time.time() - now
+			if(stat_time >= 100):
+				same = jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
+				emit('hello', same)
 			
 			if prediction > 0.5:
 				arr[KEY_INDICES["are_eyes_open"]] = True
@@ -103,7 +114,10 @@ class Camera:
 				time_elapsed += time.time() - start
 				print(time_elapsed)
 				if(time_elapsed > sleeping_delay) and (close == 0):
-					#play like rick rolld or some shit					
+					#play like rick rolld or some shit	
+					p = Process(target=self.play_music)
+					p.start()
+					
 					self.asleep = True
 					print("You're sleeping")
 					blue.on()	# turns on the blue led
@@ -258,6 +272,7 @@ def asdf():
 	return jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
 
 def main():
+	
 #	print("Starting yo juj")
 
 	#cameraThread = CameraThread(predictor, cascade)
