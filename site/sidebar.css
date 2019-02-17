@@ -1,0 +1,48 @@
+/* sidebar */
+*{
+	margin:0px;
+	padding: 0px;
+}
+#sidebar {
+	font-size: 10pt;
+	position:fixed;
+	width:200px;
+	height:100%;
+	background:#151719;
+	right:-200px;
+	transition: all 200ms linear;
+}
+#sidebar.active{
+	right:0px; 
+	background: rgba(0, 0, 0, 0.6);
+}
+#sidebar ul {
+	color:rgba(230,230,230,0.9);
+	list-style: none;
+	padding:10px 10px;
+	border-bottom: 1px solid rgba(100,100,100,0.3);
+}
+#sidebar li:hover{
+	background:#222;
+}
+#sidebar .toggle-btn{
+	position: absolute;
+	right:230px;
+	top:20px;
+}
+#sidebar .toggle-btn span{
+	font-size: 12pt;
+	display:block;
+	width:54px;
+	height:24px;
+	margin:3px 0px;
+	color: white;
+	border:1px solid #fff;
+	background: rgba(0, 0, 0, 0.2);
+	
+
+}
+#sidebar .toggle-btn span:hover{
+	background:#333;
+  	color:white;
+}
