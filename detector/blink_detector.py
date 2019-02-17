@@ -11,7 +11,7 @@ from PIL import Image
 from gpiozero import LED
 from flask_socketio import SocketIO, send, emit
 from flask_script import Manager, Server
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory, render_template
 from multiprocessing import Process, Array
 from collections import defaultdict
 from twilio.rest import Client
@@ -252,7 +252,8 @@ class Camera:
 
 
 # Flask stuff
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../site/', static_url_path='', static_folder='../site/')
+app.debug = True
 print("App started")
 socketio = SocketIO(app)
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
@@ -265,13 +266,19 @@ def index():
 	global c, shared_data
 	p = Process(target=c.start, args=(shared_data,))
 	p.start()
-	return 'same'
+	print ("???")
+	return render_template('index.html')
+	#return app.send_static_file('../site/index.html')
 
 @app.route('/stats')
 def stats():
 	global shared_data
 	return jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
 
+@app.route('/<path:path>')
+def static_file(path):
+    return app.send_static_file('../site/')
+   
 def main():
 
 #	print("Starting yo juj")
