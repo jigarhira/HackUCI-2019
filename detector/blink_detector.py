@@ -16,6 +16,7 @@ from multiprocessing import Process, Array
 from collections import defaultdict
 from twilio.rest import Client
 from subprocess import call
+from threading import Thread
 import os
 import random
 
@@ -100,10 +101,12 @@ class Camera:
 
 			# blinks
 			# if the eyes are open reset the counter for close eyes
+			print("prediction: " + str(prediction))
 			if prediction > 0.5:
+				print("ya boi")
 				# Emit when driver re-opens eyes
 				if close == 1:
-					self.socket.emit("openEyes", {})
+					self.socket.emit("openEyes", {'data': 1337})
 				arr[KEY_INDICES["are_eyes_open"]] = True
 				close = 0
 				time_elapsed = 0
@@ -114,16 +117,21 @@ class Camera:
 				arr[KEY_INDICES["are_eyes_open"]] = False
 				time_elapsed += time.time() - start
 				print(time_elapsed)
+				self.socket.emit("closeEyes", {'data': 1337})
 				if (time_elapsed > sleeping_delay) and (close == 0):
 					#play like rick rolld or some shit
-					p = Process(target=self.play_music)
-					p.start()
+					#p = Process(target=self.play_music)
+					#p.start()
+					print("before soundthread")
+					soundThread = Thread(target=self.play_music)
+					soundThread.start()
+					print("after soundthread")
 
 					self.asleep = True
 					print("You're sleeping")
 					blue.on()	# turns on the blue led
 					close += 1
-					self.socket.emit("sleep", {})
+					self.socket.emit("sleep", {'data': 1337})
 				if (time_elapsed > sms_delay) and (sent == 0):
 					print("SMS Sent!")
 					message = client.messages.create(
@@ -132,7 +140,7 @@ class Camera:
 						to=sms_to
 					)
 					sent = 1
-					self.socket.emit("smsSent", {})
+					self.socket.emit("smsSent", {'data': 1337})
 
 
 
