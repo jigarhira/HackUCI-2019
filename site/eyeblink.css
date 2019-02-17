@@ -1,20 +1,16 @@
-html, body {
-  display: flex;
-  height: 100%;
-  width: 100%;
-  background: #FFF8DC;
-}
-svg {
+/*svg {
   margin: auto;
   width: 140px;
   height: 100px;
   background: #594c26;
   border-radius: 50%;
 }
+*/
 content {
 text-align: center;
 
 }
+/*
 #lid {
   animation: blink 2.4s infinite;
 }
