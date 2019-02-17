@@ -41,17 +41,19 @@ KEY_INDICES = {
 }
 
 class Camera:
-	def __init__(self, predictor, cascade):
+	def __init__(self, predictor, cascade, socket):
 		self.predictor = predictor
 		self.cascade = cascade
 		self.asleep = False
+		self.socket = socket
+		self.is_running = False
 
 	def play_music(self):
 		rando = random.randint(1,2)
 		os.system('aplay -D bluealsa:HCI=hci0,DEV=2C:41:A1:AD:A9:D9,PROFILE=a2dp /home/pi/Downloads/%d.wav'%rando)
 
 	def start(self, arr):
-		global socketio
+		self.is_running = True
 		# turns on the green power led
 		green.on()
 		# open the camera,load the cnn model
@@ -74,7 +76,7 @@ class Camera:
 		camera.framerate = 80
 		camera.resolution = (320, 180)
 
-		while True:
+		while self.is_running:
 			now = time.time()
 
 			camera.capture(output, 'rgb')
@@ -101,7 +103,7 @@ class Camera:
 			if prediction > 0.5:
 				# Emit when driver re-opens eyes
 				if close == 1:
-					socketio.emit("openEyes", {})
+					self.socket.emit("openEyes", {})
 				arr[KEY_INDICES["are_eyes_open"]] = True
 				close = 0
 				time_elapsed = 0
@@ -121,7 +123,7 @@ class Camera:
 					print("You're sleeping")
 					blue.on()	# turns on the blue led
 					close += 1
-					socketio.emit("sleep", {})
+					self.socket.emit("sleep", {})
 				if (time_elapsed > sms_delay) and (sent == 0):
 					print("SMS Sent!")
 					message = client.messages.create(
@@ -130,7 +132,7 @@ class Camera:
 						to=sms_to
 					)
 					sent = 1
-					socketio.emit("smsSent", {})
+					self.socket.emit("smsSent", {})
 
 
 
@@ -146,6 +148,9 @@ class Camera:
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 			cv2.putText(frame, "State: {}".format(state), (300, 30),
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+	def stop(self):
+		self.is_running = False
 
 	# detect the face rectangle
 	def detect(self, img, minimumFeatureSize=(20, 20)):
@@ -257,7 +262,7 @@ print("App started")
 socketio = SocketIO(app)
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_alt.xml')
-c = Camera(predictor, face_cascade)
+c = Camera(predictor, face_cascade, socketio)
 shared_data = Array('i',(0,0))
 
 @app.route('/')
