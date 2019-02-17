@@ -291,7 +291,13 @@ def stats():
 @app.route('/<path:path>')
 def static_file(path):
     return app.send_static_file('../site/')
-   
+
+@socketio.on('data')
+def on_data(a):
+	global shared_data
+	data = { "blink_count": shared_data[KEY_INDICES["blink_count"]], "are_eyes_open": shared_data[KEY_INDICES["are_eyes_open"]] }
+	emit(data)   
+
 def main():
 
 #	print("Starting yo juj")
