@@ -298,7 +298,12 @@ def static_file(path):
 def on_data(a):
 	global shared_data
 	data = { "blink_count": shared_data[KEY_INDICES["blink_count"]], "are_eyes_open": shared_data[KEY_INDICES["are_eyes_open"]] }
-	emit(data)   
+	emit(data)
+
+@socketio.on('phoneNumberUpdate')
+def on_phone_number_update(phone):
+	global sms_to
+	sms_to = phone
 
 def main():
 
