@@ -1,25 +1,18 @@
 const socket = io.connect(`http://${document.domain}:${location.port}`)
 
-socket.on('openEyes', data => {
-    console.log('openEyes', data)
-})
-
-socket.on('closeEyes', data => {
-    console.log('closeEyes', data)
-})
-
-socket.on('sleep', data => {
-    console.log('sleep', data)
-})
-
-socket.on('smsSent', data => {
-    console.log('smsSent', data)
-})
-
 // If possible add to this code so UI is nice and functional
+socket.on('data', data => {
+  console.log(data)
+  if (data.are_eyes_open != 1) {
+    console.log('eyes are not open!')
+  }
+  console.log('blinks: ' + data.blink_count)
+})
 
 $(document).ready(function() {
-
+  setInterval(() => {
+    socket.emit('data', null)
+  }, 1000)
   function toggleSidebar() {
     $(".button").toggleClass("active");
     $("main").toggleClass("move-to-left");
