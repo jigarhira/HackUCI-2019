@@ -11,11 +11,12 @@ from PIL import Image
 from gpiozero import LED
 from flask_socketio import SocketIO, send, emit
 from flask_script import Manager, Server
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory, render_template
 from multiprocessing import Process, Array
 from collections import defaultdict
 from twilio.rest import Client
 from subprocess import call
+from threading import Thread
 import os
 import random
 
@@ -41,17 +42,19 @@ KEY_INDICES = {
 }
 
 class Camera:
-	def __init__(self, predictor, cascade):
+	def __init__(self, predictor, cascade, socket):
 		self.predictor = predictor
 		self.cascade = cascade
 		self.asleep = False
+		self.socket = socket
+		self.is_running = False
 
 	def play_music(self):
 		rando = random.randint(1,2)
 		os.system('aplay -D bluealsa:HCI=hci0,DEV=2C:41:A1:AD:A9:D9,PROFILE=a2dp /home/pi/Downloads/%d.wav'%rando)
 
 	def start(self, arr):
-		global socketio
+		self.is_running = True
 		# turns on the green power led
 		green.on()
 		# open the camera,load the cnn model
@@ -74,7 +77,7 @@ class Camera:
 		camera.framerate = 80
 		camera.resolution = (320, 180)
 
-		while True:
+		while self.is_running:
 			now = time.time()
 
 			camera.capture(output, 'rgb')
@@ -98,10 +101,12 @@ class Camera:
 
 			# blinks
 			# if the eyes are open reset the counter for close eyes
+			print("prediction: " + str(prediction))
 			if prediction > 0.5:
+				print("ya boi")
 				# Emit when driver re-opens eyes
 				if close == 1:
-					socketio.emit("openEyes", {})
+					self.socket.emit("openEyes", {'data': 1337})
 				arr[KEY_INDICES["are_eyes_open"]] = True
 				close = 0
 				time_elapsed = 0
@@ -112,16 +117,21 @@ class Camera:
 				arr[KEY_INDICES["are_eyes_open"]] = False
 				time_elapsed += time.time() - start
 				print(time_elapsed)
+				self.socket.emit("closeEyes", {'data': 1337})
 				if (time_elapsed > sleeping_delay) and (close == 0):
 					#play like rick rolld or some shit
-					p = Process(target=self.play_music)
-					p.start()
+					#p = Process(target=self.play_music)
+					#p.start()
+					print("before soundthread")
+					soundThread = Thread(target=self.play_music)
+					soundThread.start()
+					print("after soundthread")
 
 					self.asleep = True
 					print("You're sleeping")
 					blue.on()	# turns on the blue led
 					close += 1
-					socketio.emit("sleep", {})
+					self.socket.emit("sleep", {'data': 1337})
 				if (time_elapsed > sms_delay) and (sent == 0):
 					print("SMS Sent!")
 					message = client.messages.create(
@@ -130,7 +140,7 @@ class Camera:
 						to=sms_to
 					)
 					sent = 1
-					socketio.emit("smsSent", {})
+					self.socket.emit("smsSent", {'data': 1337})
 
 
 
@@ -146,6 +156,9 @@ class Camera:
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 			cv2.putText(frame, "State: {}".format(state), (300, 30),
 				cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+	def stop(self):
+		self.is_running = False
 
 	# detect the face rectangle
 	def detect(self, img, minimumFeatureSize=(20, 20)):
@@ -252,12 +265,13 @@ class Camera:
 
 
 # Flask stuff
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../site/', static_url_path='', static_folder='../site/')
+app.debug = True
 print("App started")
 socketio = SocketIO(app)
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_alt.xml')
-c = Camera(predictor, face_cascade)
+c = Camera(predictor, face_cascade, socketio)
 shared_data = Array('i',(0,0))
 
 @app.route('/')
@@ -265,13 +279,19 @@ def index():
 	global c, shared_data
 	p = Process(target=c.start, args=(shared_data,))
 	p.start()
-	return 'same'
+	print ("???")
+	return render_template('index.html')
+	#return app.send_static_file('../site/index.html')
 
 @app.route('/stats')
 def stats():
 	global shared_data
 	return jsonify(blink_count=shared_data[KEY_INDICES["blink_count"]], are_eyes_open=shared_data[KEY_INDICES["are_eyes_open"]])
 
+@app.route('/<path:path>')
+def static_file(path):
+    return app.send_static_file('../site/')
+   
 def main():
 
 #	print("Starting yo juj")
