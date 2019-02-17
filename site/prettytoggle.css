@@ -23,7 +23,6 @@ header hgroup {
   border: 5px solid rgba(0,0,0,0,0.5);
   padding: .5em 3em;
   background-color: rgba(0,0,0,0.5);
-  background-color: #fff;
   z-index: 2;
 }
 main {
@@ -124,11 +123,11 @@ main {
 }
 
 .move-to-left {
-  /*-webkit-transform: translateX(-400px);
-  -moz-transform: translateX(-400px);
-  -ms-transform: translateX(-400px);
-  -o-transform: translateX(-400px);*/
-  transform: translateX(-400px);
+  -webkit-transform: translateX(-350px);
+  -moz-transform: translateX(-350px);
+  -ms-transform: translateX(-350px);
+  -o-transform: translateX(-350px);
+  transform: translateX(-350px);
 }
 
 nav {
