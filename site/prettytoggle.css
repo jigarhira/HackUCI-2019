@@ -5,8 +5,8 @@ html {
   padding: 0;
   margin: 0;
   font-family: 'Arimo', sans-serif;
-  background: url(iOS.jpg);
-  background-size: cover;
+  background: url(20190216_215402.jpg);
+  background-size: contain;
 }
 header hgroup {
   /*-webkit-transform: translate(-50%, -50%);
